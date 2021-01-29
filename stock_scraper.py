@@ -18,18 +18,22 @@ def get_fundamentals():
     try:
         # Find fundamentals table
         fundamentals = pd.read_html(str(html), attrs={'class': 'snapshot-table2'})[0]
-
+        fundamentals = fundamentals[fundamentals.columns[4:6]]
         # Clean up fundamentals dataframe
-        fundamentals.columns = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+        fundamentals.columns = ['4', '5',]
         colOne = []
         colLength = len(fundamentals)
-        for k in np.arange(0, colLength, 2):
+        for k in np.arange(int(fundamentals.columns[0]), colLength, 2):
+            if k > int(fundamentals.columns[-1]):
+              break
             colOne.append(fundamentals[f'{k}'])
         attrs = pd.concat(colOne, ignore_index=True)
 
         colTwo = []
         colLength = len(fundamentals)
-        for k in np.arange(1, colLength, 2):
+        for k in np.arange(int(fundamentals.columns[0])+1, colLength, 2):
+            if k > int(fundamentals.columns[-1]):
+              break
             colTwo.append(fundamentals[f'{k}'])
         vals = pd.concat(colTwo, ignore_index=True)
 
