@@ -1,3 +1,4 @@
+
 import pandas as pd
 import numpy as np
 from bs4 import BeautifulSoup as soup
@@ -18,29 +19,24 @@ def get_fundamentals():
     try:
         # Find fundamentals table
         fundamentals = pd.read_html(str(html), attrs={'class': 'snapshot-table2'})[0]
-        fundamentals = fundamentals[fundamentals.columns[4:6]]
+
         # Clean up fundamentals dataframe
-        fundamentals.columns = ['4', '5',]
+        fundamentals.columns = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
         colOne = []
         colLength = len(fundamentals)
-        for k in np.arange(int(fundamentals.columns[0]), colLength, 2):
-            if k > int(fundamentals.columns[-1]):
-              break
+        for k in np.arange(0, colLength, 2):
             colOne.append(fundamentals[f'{k}'])
         attrs = pd.concat(colOne, ignore_index=True)
 
         colTwo = []
         colLength = len(fundamentals)
-        for k in np.arange(int(fundamentals.columns[0])+1, colLength, 2):
-            if k > int(fundamentals.columns[-1]):
-              break
+        for k in np.arange(1, colLength, 2):
             colTwo.append(fundamentals[f'{k}'])
         vals = pd.concat(colTwo, ignore_index=True)
 
         fundamentals = pd.DataFrame()
         fundamentals['Attributes'] = attrs
         fundamentals['Values'] = vals
-        fundamentals = fundamentals.set_index('Attributes')
         fundamentals.to_csv('fundamentals.csv')
         return fundamentals
 
@@ -84,4 +80,5 @@ def get_insider():
     except Exception as e:
         return e
 
-print(get_fundamentals())
+csv = get_fundamentals()
+csv["Values"][70]
