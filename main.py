@@ -20,3 +20,4 @@ def get_data(csv, prices):
     esp_next_y = torch.tensor(esp_next_y)
     esp_next_five = torch.tensor(esp_next_five)
     sales_q_q = torch.tensor(sales_q_q)
+    return price, torch.cat([esp_next_q, esp_next_y, esp_next_five, sales_q_q])
