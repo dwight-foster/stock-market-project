@@ -3,19 +3,19 @@ import pandas as pd
 import numpy as np
 from bs4 import BeautifulSoup as soup
 from urllib.request import Request, urlopen
+def get_html(symbol):
+    pd.set_option('display.max_colwidth', 25)
 
-pd.set_option('display.max_colwidth', 25)
+    print ('Getting data for ' + symbol + "...\n")
 
-symbol = input("Enter a ticker: ")
-print ('Getting data for ' + symbol + "...\n")
+    url = ("http://finviz.com/quote.ashx?t=" + symbol.lower())
+    req = Request(url, headers={"User-Agent": 'Mozilla/5.0'})
+    webpage = urlopen(req).read()
+    html = soup(webpage, "html.parser")
+    return html
 
-url = ("http://finviz.com/quote.ashx?t=" + symbol.lower())
-req = Request(url, headers={"User-Agent": 'Mozilla/5.0'})
-webpage = urlopen(req).read()
-html = soup(webpage, "html.parser")
-
-
-def get_fundamentals():
+def get_fundamentals(symbol):
+    html = get_html(symbol)
     try:
         # Find fundamentals table
         fundamentals = pd.read_html(str(html), attrs={'class': 'snapshot-table2'})[0]
@@ -44,7 +44,9 @@ def get_fundamentals():
         return e
 
 
-def get_news():
+def get_news(symbol):
+    html = get_html(symbol)
+
     try:
         # Find news table
         news = pd.read_html(str(html), attrs={'class': 'fullview-news-outer'})[0]
@@ -62,7 +64,9 @@ def get_news():
         return e
 
 
-def get_insider():
+def get_insider(symbol):
+    html = get_html(symbol)
+
     try:
         # Find insider table
         insider = pd.read_html(str(html), attrs={'class': 'body-table'})[0]
