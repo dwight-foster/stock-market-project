@@ -81,4 +81,4 @@ def get_insider():
         return e
 
 csv = get_fundamentals()
-csv["Values"][70]
+print(csv["Values"][32])
