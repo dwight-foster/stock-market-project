@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-
+import torch.nn.functional as F
 
 class LSTM(nn.Module):
     def __init__(self, input_sizes, hidden_size, num_layers, dropout, output_size):
@@ -19,6 +19,7 @@ class LSTM(nn.Module):
         x = x.view(x.shape[0], sum(x.shape[1:-1]))
         x = torch.cat([x, x2], dim=1)
         out = self.fc_out(x)
+        out = F.tanh(out)
         return out
 
     def init_state(self, sequence_length):
