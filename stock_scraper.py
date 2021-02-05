@@ -6,7 +6,6 @@ from urllib.request import Request, urlopen
 def get_html(symbol):
     pd.set_option('display.max_colwidth', 25)
 
-    print('Getting data for ' + symbol + "...\n")
 
     url = ("http://finviz.com/quote.ashx?t=" + symbol.lower())
     req = Request(url, headers={"User-Agent": 'Mozilla/5.0'})

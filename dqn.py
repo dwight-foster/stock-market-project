@@ -7,6 +7,7 @@ import torchvision
 import torch.optim as optim
 from collections import deque
 
+
 def get_stock(csv):
     price = csv["Values"][70]
     esp_next_q = csv["Values"][26]
@@ -61,7 +62,7 @@ class DQN:
             zeros = [0 for i in range(seq_length)]
             for i in stocks:
                 prices[i] = deque(zeros, maxlen=seq_length)
-
+        prices_T = []
         for i in stocks:
             csv, result = get_fundamentals(i)
             if result == 0:
@@ -71,9 +72,11 @@ class DQN:
             price_deque = prices[i]
             price_deque.append(price)
             prices[i] = price_deque
-            prices_T = torch.stack([price_deque.unsqueeze(0)], dim=0)
-            features = torch.cat(feature, dim=0)
-        return prices_T, features, prices
+            price_deque = torch.tensor([price_deque])
+            prices_T.append(price_deque)
+        prices_T = torch.stack(prices_T, dim=0)
+        features = torch.cat([feature], dim=0)
+        return prices_T.float(), features, prices
 
     def get_price(self, stock):
         csv = get_fundamentals(stock)
@@ -83,15 +86,18 @@ class DQN:
     def get_action(self, model, stocks, current_stocks, prices=None):
         prices_T, features, prices = self.get_data(stocks, prices)
         prices_T = prices_T.cuda()
-        features = features.cuda().unsqueeze(0)
-        current_stocks = current_stocks.cuda().unsqueeze(0)
-        features = torch.cat([features,current_stocks], dim=1)
+        features = features.cuda()
+        current_stocks = current_stocks.cuda()
+
+        features = torch.cat([features, current_stocks], dim=1)
+        prices_T = torch.reshape(prices_T, (prices_T.shape[2], prices_T.shape[0], 1))
         pred = self.model([prices_T, features])
         pred *= 2
         return pred, prices
 
     def run(self, reward):
-        actions, self.prices = self.get_action(self.model, self.stocks, torch.tensor([list(self.stocks_owned.values())]), self.prices)
+        actions, self.prices = self.get_action(self.model, self.stocks,
+                                               torch.tensor([list(self.stocks_owned.values())]), self.prices)
         print(actions.shape)
         for i in range(actions.shape[0]):
             if self.stocks_owned[self.stocks[i]] - int(actions[i]) < 0:
