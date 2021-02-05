@@ -6,14 +6,16 @@ from urllib.request import Request, urlopen
 def get_html(symbol):
     pd.set_option('display.max_colwidth', 25)
 
-    print ('Getting data for ' + symbol + "...\n")
+    print('Getting data for ' + symbol + "...\n")
 
     url = ("http://finviz.com/quote.ashx?t=" + symbol.lower())
     req = Request(url, headers={"User-Agent": 'Mozilla/5.0'})
-    webpage = urlopen(req).read()
-    html = soup(webpage, "html.parser")
-    return html
-
+    try:
+        webpage = urlopen(req).read()
+        html = soup(webpage, "html.parser")
+        return html
+    except:
+        return 0
 def get_fundamentals(symbol):
     html = get_html(symbol)
     try:
@@ -38,10 +40,10 @@ def get_fundamentals(symbol):
         fundamentals['Attributes'] = attrs
         fundamentals['Values'] = vals
         fundamentals.to_csv('fundamentals.csv')
-        return fundamentals
+        return fundamentals, 1
 
-    except Exception as e:
-        return e
+    except:
+        return 0, 0
 
 
 def get_news(symbol):
@@ -84,5 +86,3 @@ def get_insider(symbol):
     except Exception as e:
         return e
 
-csv = get_fundamentals()
-print(csv["Values"][32])

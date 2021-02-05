@@ -4,13 +4,13 @@ import torch.nn.functional as F
 
 class LSTM(nn.Module):
     def __init__(self, input_sizes, hidden_size, num_layers, dropout, output_size):
-        super(model, self).__init__()
+        super(LSTM, self).__init__()
         self.lstm_size = input_sizes[0]
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_sizes[0], hidden_size, num_layers, dropout)
         self.fc_in = nn.Sequential(nn.Linear(input_sizes[1], 32), nn.Dropout(dropout), nn.ReLU(), nn.Linear(32, 256),
                                    nn.Dropout(dropout),
-                                   nn.ReLU(), nn.Linear(256, 32), nn.ReLU)
+                                   nn.ReLU(), nn.Linear(256, 32), nn.ReLU())
         self.fc_out = nn.Sequential(nn.Linear(input_sizes[0] + hidden_size + 32, output_size))
 
     def forward(self, inputs):
