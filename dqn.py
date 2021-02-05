@@ -14,7 +14,6 @@ def get_stock(csv):
     esp_next_y = csv["Values"][28]
     esp_next_five = csv["Values"][29]
     sales_q_q = csv["Values"][32]
-    price = torch.tensor(float(price))
     if esp_next_q == "-":
         esp_next_q = 0
 
@@ -31,7 +30,7 @@ def get_stock(csv):
     else:
         sales_q_q = float(sales_q_q.split("%")[0])
     features = torch.tensor([esp_next_y, esp_next_five, sales_q_q, float(esp_next_q)])
-
+    price = torch.tensor(float(price))
     return price, features
 
 
@@ -48,13 +47,21 @@ class DQN:
         self.stocks_owned = {}
         self.stocks_value = {}
         self.stocks = stocks
-        for stock in stocks:
+        for stock in self.stocks:
             self.stocks_owned[stock] = 0
             self.stocks_value[stock] = 0
+        self.usable_stocks = 0
         self.start_money = 1000
         self.current_money = self.start_money
         self.total_value = 1000
         self.lr_scheduler = optim.lr_scheduler.StepLR(self.optimizer, 200, 0.5)
+
+    def init_values(self):
+        for i in range(self.usable_stocks):
+            print(self.usable_stocks)
+            stock = self.stocks[i]
+            self.stocks_owned[stock] = 0
+            self.stocks_value[stock] = 0
 
     def get_data(self, stocks, prices=None, seq_length=50):
         if prices == None:
@@ -63,41 +70,44 @@ class DQN:
             for i in stocks:
                 prices[i] = deque(zeros, maxlen=seq_length)
         prices_T = []
+        features = []
         for i in stocks:
             csv, result = get_fundamentals(i)
             if result == 0:
                 continue
             price, feature = get_stock(csv)
+
             feature = feature.unsqueeze(0)
             price_deque = prices[i]
             price_deque.append(price)
             prices[i] = price_deque
             price_deque = torch.tensor([price_deque])
             prices_T.append(price_deque)
+            features.append(feature)
         prices_T = torch.stack(prices_T, dim=0)
-        features = torch.cat([feature], dim=0)
-        return prices_T.float(), features, prices
+        features = torch.stack(features, dim=0)
+        return prices_T.float(), features.squeeze(1), prices
 
     def get_price(self, stock):
         csv = get_fundamentals(stock)
         price, feature = get_stock(csv)
         return price
 
-    def get_action(self, model, stocks, current_stocks, prices=None):
+    def get_action(self, model, stocks, current_stocks, hidden, prices=None):
         prices_T, features, prices = self.get_data(stocks, prices)
         prices_T = prices_T.cuda()
         features = features.cuda()
-        current_stocks = current_stocks.cuda()
-
+        current_stocks = current_stocks.cuda().view(current_stocks.shape[1],  current_stocks.shape[0])
         features = torch.cat([features, current_stocks], dim=1)
+        print(features.shape)
         prices_T = torch.reshape(prices_T, (prices_T.shape[2], prices_T.shape[0], 1))
-        pred = self.model([prices_T, features])
+        pred, hidden = self.model([prices_T, features], hidden)
         pred *= 2
-        return pred, prices
+        return pred, hidden, prices
 
-    def run(self, reward):
-        actions, self.prices = self.get_action(self.model, self.stocks,
-                                               torch.tensor([list(self.stocks_owned.values())]), self.prices)
+    def run(self, reward, hidden):
+        actions, hidden, self.prices = self.get_action(self.model, self.stocks,
+                                               torch.tensor([list(self.stocks_owned.values())]), hidden, self.prices)
         print(actions.shape)
         for i in range(actions.shape[0]):
             if self.stocks_owned[self.stocks[i]] - int(actions[i]) < 0:
@@ -120,8 +130,8 @@ class DQN:
 
         returns = self.total_value - self.start_money
         reward += returns
-        return reward
+        return reward, hidden
 
-    def compute_loss(self, reward):
-        reward = self.run(reward)
-        return reward, self.total_value, self.stocks_owned
+    def compute_loss(self, reward, hidden):
+        reward, hidden = self.run(reward, hidden)
+        return reward, self.total_value, self.stocks_owned, hidden
