@@ -11,12 +11,12 @@ class LSTM(nn.Module):
         self.fc_in = nn.Sequential(nn.Linear(input_sizes[1], 32), nn.Dropout(dropout), nn.ReLU(), nn.Linear(32, 256),
                                    nn.Dropout(dropout),
                                    nn.ReLU(), nn.Linear(256, 32), nn.ReLU())
-        self.fc_out = nn.Sequential(nn.Linear(input_sizes[0] + hidden_size + 32, output_size))
+        self.fc_out = nn.Sequential(nn.Linear(input_sizes[2] * hidden_size + 32, output_size))
 
     def forward(self, inputs, hidden):
         x, h= self.lstm(inputs[0], hidden)
         x2 = self.fc_in(inputs[1])
-        x = x.view(x.shape[0], sum(x.shape[1:-1]))
+        x = x.view(x.shape[1], x.shape[0]* x.shape[2])
         x = torch.cat([x, x2], dim=1)
         out = self.fc_out(x)
         out = F.tanh(out)
