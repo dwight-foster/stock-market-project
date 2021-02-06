@@ -10,7 +10,7 @@ from statistics import mean
 from tqdm import tqdm
 
 batch_size = 64
-input_sizes = [1, 5]
+input_sizes = [1, 5, 50]
 hidden_size = 300
 num_layers = 2
 dropout = 0.5
