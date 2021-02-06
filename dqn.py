@@ -47,7 +47,6 @@ class DQN:
         self.stocks_owned = {}
         self.stocks_value = {}
         self.stocks = stocks
-        print(len(self.stocks))
         for i in range(len(self.stocks)):
             self.stocks_owned[self.stocks[i]] = 0
             self.stocks_value[self.stocks[i]] = 0
@@ -109,8 +108,7 @@ class DQN:
         actions, hidden, self.prices = self.get_action(self.model, self.stocks,
                                                torch.tensor([list(self.stocks_owned.values())]), hidden, self.prices)
         for i in range(actions.shape[0]):
-            print(int(self.stocks_owned[self.stocks[i]])-int(actions[i]))
-            if (self.stocks_owned[self.stocks[i]] - int(actions[i])) < 0:
+            if (int(self.stocks_owned[self.stocks[i]]) + int(actions[i])) < 0:
                 reward -= 1
             elif int(actions[i]) < 0:
                 price = self.get_price(self.stocks[i])
@@ -124,14 +122,15 @@ class DQN:
                 if self.current_money - cost < 0:
                     reward -= 5
                 else:
+                    
                     self.stocks_owned[self.stocks[i]] += int(actions[i])
                     self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
                     self.total_value = self.current_money + sum(list(self.stocks_value.values()))
-
+                    self.current_money -= cost
         returns = self.total_value - self.start_money
         reward += returns
-        return reward, hidden
+        return reward, hidden, returns
 
     def compute_loss(self, reward, hidden):
-        reward, hidden = self.run(reward, hidden)
-        return reward, self.total_value, self.stocks_owned, hidden
+        reward, hidden, returns = self.run(reward, hidden)
+        return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value
