@@ -89,7 +89,7 @@ class DQN:
         return prices_T.float(), features.squeeze(1), prices
 
     def get_price(self, stock):
-        csv = get_fundamentals(stock)
+        csv, result = get_fundamentals(stock)
         price, feature = get_stock(csv)
         return price
 
