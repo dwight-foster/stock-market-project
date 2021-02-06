@@ -47,9 +47,10 @@ class DQN:
         self.stocks_owned = {}
         self.stocks_value = {}
         self.stocks = stocks
-        for stock in self.stocks:
-            self.stocks_owned[stock] = 0
-            self.stocks_value[stock] = 0
+        print(len(self.stocks))
+        for i in range(len(self.stocks)):
+            self.stocks_owned[self.stocks[i]] = 0
+            self.stocks_value[self.stocks[i]] = 0
         self.usable_stocks = 0
         self.start_money = 1000
         self.current_money = self.start_money
@@ -99,7 +100,6 @@ class DQN:
         features = features.cuda()
         current_stocks = current_stocks.cuda().view(current_stocks.shape[1],  current_stocks.shape[0])
         features = torch.cat([features, current_stocks], dim=1)
-        print(features.shape)
         prices_T = torch.reshape(prices_T, (prices_T.shape[2], prices_T.shape[0], 1))
         pred, hidden = self.model([prices_T, features], hidden)
         pred *= 2
@@ -108,25 +108,25 @@ class DQN:
     def run(self, reward, hidden):
         actions, hidden, self.prices = self.get_action(self.model, self.stocks,
                                                torch.tensor([list(self.stocks_owned.values())]), hidden, self.prices)
-        print(actions.shape)
         for i in range(actions.shape[0]):
-            if self.stocks_owned[self.stocks[i]] - int(actions[i]) < 0:
-                self.reward -= 1
+            print(int(self.stocks_owned[self.stocks[i]])-int(actions[i]))
+            if (self.stocks_owned[self.stocks[i]] - int(actions[i])) < 0:
+                reward -= 1
             elif int(actions[i]) < 0:
                 price = self.get_price(self.stocks[i])
                 self.current_money += (int(actions[i]) * -1) * price
                 self.stocks_owned[self.stocks[i]] += int(actions[i])
                 self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
-                self.total_value = self.current_money + sum(self.stocks_value.items())
+                self.total_value = self.current_money + sum(self.stocks_value.values())
             else:
                 price = self.get_price(self.stocks[i])
-                cost = price * int(self.actions[i])
+                cost = price * int(actions[i])
                 if self.current_money - cost < 0:
                     reward -= 5
                 else:
                     self.stocks_owned[self.stocks[i]] += int(actions[i])
                     self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
-                    self.total_value = self.current_money + sum(self.stocks_value.items())
+                    self.total_value = self.current_money + sum(list(self.stocks_value.values()))
 
         returns = self.total_value - self.start_money
         reward += returns
