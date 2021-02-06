@@ -8,6 +8,8 @@ from model import LSTM
 from dqn import *
 from statistics import mean
 from tqdm import tqdm
+import os
+import sys
 
 batch_size = 64
 input_sizes = [1, 5, 50]
@@ -20,7 +22,7 @@ seq_length = 50
 epochs = 100
 model = LSTM(input_sizes, hidden_size, num_layers, dropout, output_size)
 model.cuda()
-csv = pd.read_csv("nasdaq.csv")
+csv = pd.read_csv("./stock-market-project-master/nasdaq.csv")
 stocks = random.choices(csv["Symbol"], k=batch_size)
 ppo = DQN(model, lr, stocks)
 reward_list = deque(maxlen=100)
@@ -28,13 +30,12 @@ hidden = model.init_state(batch_size)
 for e in tqdm(range(epochs)):
     reward = 0
     reward, profits, stocks_owned, hidden = ppo.compute_loss(reward, hidden)
-    stocks_csv = pd.DataFrame([list(stocks_owned.keys()), list(stocks_owned.values())],
-                              columns=["Stocks", "Number Owned"])
+    data = {"Stocks": (list(stocks_owned.keys())), "Number Owned": list(stocks_owned.values())}
+    stocks_csv = pd.DataFrame(data)
     stocks_csv.to_csv("stocks_owned.csv")
-    profits_csv = pd.DataFrame([reward, profits], columns=["Reward", "Profits"])
-    profits_csv.to_csv("statistics.csv")
+    
 
-    reward_list.append(reward)
+    reward_list.append(float(reward.cpu().data))
     print(f"Reward: {reward}, Mean Reward: {mean(reward_list)}")
-    print(f"\nTotal profits: {profits}, stocks owned: {stocks_owned}")
-    time.sleep(300)
+    print(f"\nTotal profits: {profits}, stocks owned: {stocks_csv.head()}")
+    #time.sleep(300)
