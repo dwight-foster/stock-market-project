@@ -76,7 +76,7 @@ class DQN:
             if result == 0:
                 continue
             price, feature = get_stock(csv)
-
+            self.stocks_value[i] = price * self.stocks_owned[i]
             feature = feature.unsqueeze(0)
             price_deque = prices[i]
             price_deque.append(price)
