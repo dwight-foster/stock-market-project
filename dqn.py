@@ -101,31 +101,31 @@ class DQN:
         current_stocks = current_stocks.cuda().view(current_stocks.shape[1], current_stocks.shape[0])
         features = torch.cat([features, current_stocks], dim=1)
         prices_T = torch.reshape(prices_T, (prices_T.shape[2], prices_T.shape[0], 1))
-        pred, hidden = self.model([prices_T, features], hidden)
+        with torch.no_grad():
+            pred, _ = self.model([prices_T, features], hidden)
         if random.random() > self.epsilon:
             action = pred.cpu().data.max(1, keepdim=True)[1]
             self.update_epsilon()
         else:
             action = [random.choice(np.arange(self.action_size)) for i in range(pred.shape[0])]
-            action = torch.tensor(action)
-        return action, hidden, prices, prices_T, features
+            action = torch.tensor(action, dtype=torch.int64)
+        return action, prices, prices_T, features
 
     def update_epsilon(self):
         self.epsilon *= self.epsilon_decay
 
     def run(self, reward, hidden):
-
         print(len(self.stocks_owned))
-        actions, hidden, self.prices, prices_T, features = self.get_action(self.model, self.stocks,
+        actions, self.prices, prices_T, features = self.get_action(self.model, self.stocks,
                                                                            torch.tensor(
                                                                                [list(self.stocks_owned.values())]),
                                                                            hidden,
                                                                            self.prices)
         for i in range(len(actions)):
             action = self.possible_actions[actions[i]]
-            if (int(self.stocks_owned[self.stocks[i]]) + int(actions[i])) < 0:
+            if (int(self.stocks_owned[self.stocks[i]]) + int(action)) < 0:
                 reward -= 1
-            elif int(actions[i]) < 0:
+            elif int(action) < 0:
                 price = self.get_price(self.stocks[i])
                 self.current_money += (int(action) * -1) * price
                 self.stocks_owned[self.stocks[i]] += int(action)
@@ -144,17 +144,17 @@ class DQN:
                     self.current_money -= cost
         returns = self.total_value - self.start_money
         reward += returns / 4
-        return reward, hidden, returns, prices_T, features, actions
+        return reward, returns, prices_T, features, actions
 
     def compute_loss(self, reward, hidden):
-        reward, hidden, returns, prices_T, features, actions = self.run(reward, hidden)
-        Q_targets_next, self.target_hidden = self.target_model([prices_T, features], self.target_hidden)
-        Q_targets_next = Q_targets_next.detach().cpu().data.max(1, keepdim=True)[1]
+        reward, returns, prices_T, features, actions = self.run(reward, hidden)
+        Q_targets_next,_ = self.target_model([prices_T, features], hidden)
+        Q_targets_next = Q_targets_next.detach().data.max(1, keepdim=True)[1]
         Q_targets = reward + (self.gamma * Q_targets_next)
-        Q_expected, _ = self.model([prices_T, features], hidden)
-        print(actions.type())
+        Q_expected, hidden = self.model([prices_T, features], hidden)
+        hidden[0].detach_()
+        hidden[1].detach_()
         Q_expected = Q_expected.gather(1, actions.unsqueeze(1).cuda())
-        print(Q_targets.shape)
         loss = self.criterion(Q_expected, Q_targets)
         self.optimizer.zero_grad()
         loss.backward()
