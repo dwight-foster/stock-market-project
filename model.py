@@ -19,7 +19,7 @@ class LSTM(nn.Module):
         x = x.view(x.shape[1], x.shape[0]* x.shape[2])
         x = torch.cat([x, x2], dim=1)
         out = self.fc_out(x)
-        out = torch.tanh(out)
+        out = torch.softmax(out, dim=1)
         return out, h
 
     def init_state(self, batch_size):

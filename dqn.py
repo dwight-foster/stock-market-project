@@ -5,7 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torch.optim as optim
-from collections import deque
+from collections import deque, namedtuple
+import random
 
 
 def get_stock(csv):
@@ -35,33 +36,33 @@ def get_stock(csv):
 
 
 class DQN:
-    def __init__(self, model, lr, stocks, gamma=0.99, epsilon=0.95, epsilon_decay=0.1):
+    def __init__(self, model, lr, stocks, action_size, hidden,
+                 gamma=0.99, epsilon=0.95, epsilon_decay=0.9, TAU=1e-3):
         self.model = model
+        self.target_model = model
         self.lr = lr
         self.optimizer = optim.Adam(model.parameters(), self.lr)
         self.criterion = nn.MSELoss()
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
+        self.TAU = TAU
         self.prices = None
         self.stocks_owned = {}
         self.stocks_value = {}
         self.stocks = stocks
-        for i in range(len(self.stocks)):
-            self.stocks_owned[self.stocks[i]] = 0
-            self.stocks_value[self.stocks[i]] = 0
+        print(len(self.stocks))
+        for stock in self.stocks:
+            self.stocks_owned[stock] = 0
+            self.stocks_value[stock] = 0
+        self.action_size = action_size
+        self.target_hidden = hidden
         self.usable_stocks = 0
         self.start_money = 1000
         self.current_money = self.start_money
         self.total_value = 1000
         self.lr_scheduler = optim.lr_scheduler.StepLR(self.optimizer, 200, 0.5)
-
-    def init_values(self):
-        for i in range(self.usable_stocks):
-            print(self.usable_stocks)
-            stock = self.stocks[i]
-            self.stocks_owned[stock] = 0
-            self.stocks_value[stock] = 0
+        self.possible_actions = [-2, -1, 0, 1, 2]
 
     def get_data(self, stocks, prices=None, seq_length=50):
         if prices == None:
@@ -97,40 +98,95 @@ class DQN:
         prices_T, features, prices = self.get_data(stocks, prices)
         prices_T = prices_T.cuda()
         features = features.cuda()
-        current_stocks = current_stocks.cuda().view(current_stocks.shape[1],  current_stocks.shape[0])
+        current_stocks = current_stocks.cuda().view(current_stocks.shape[1], current_stocks.shape[0])
         features = torch.cat([features, current_stocks], dim=1)
         prices_T = torch.reshape(prices_T, (prices_T.shape[2], prices_T.shape[0], 1))
         pred, hidden = self.model([prices_T, features], hidden)
-        pred *= 2
-        return pred, hidden, prices
+        if random.random() > self.epsilon:
+            action = pred.cpu().data.max(1, keepdim=True)[1]
+            self.update_epsilon()
+        else:
+            action = [random.choice(np.arange(self.action_size)) for i in range(pred.shape[0])]
+            action = torch.tensor(action)
+        return action, hidden, prices, prices_T, features
+
+    def update_epsilon(self):
+        self.epsilon *= self.epsilon_decay
 
     def run(self, reward, hidden):
-        actions, hidden, self.prices = self.get_action(self.model, self.stocks,
-                                               torch.tensor([list(self.stocks_owned.values())]), hidden, self.prices)
-        for i in range(actions.shape[0]):
+
+        print(len(self.stocks_owned))
+        actions, hidden, self.prices, prices_T, features = self.get_action(self.model, self.stocks,
+                                                                           torch.tensor(
+                                                                               [list(self.stocks_owned.values())]),
+                                                                           hidden,
+                                                                           self.prices)
+        for i in range(len(actions)):
+            action = self.possible_actions[actions[i]]
             if (int(self.stocks_owned[self.stocks[i]]) + int(actions[i])) < 0:
                 reward -= 1
             elif int(actions[i]) < 0:
                 price = self.get_price(self.stocks[i])
-                self.current_money += (int(actions[i]) * -1) * price
-                self.stocks_owned[self.stocks[i]] += int(actions[i])
+                self.current_money += (int(action) * -1) * price
+                self.stocks_owned[self.stocks[i]] += int(action)
                 self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
                 self.total_value = self.current_money + sum(self.stocks_value.values())
             else:
                 price = self.get_price(self.stocks[i])
-                cost = price * int(actions[i])
+                cost = price * int(action)
                 if self.current_money - cost < 0:
                     reward -= 5
                 else:
-                    
-                    self.stocks_owned[self.stocks[i]] += int(actions[i])
+
+                    self.stocks_owned[self.stocks[i]] += int(action)
                     self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
                     self.total_value = self.current_money + sum(list(self.stocks_value.values()))
                     self.current_money -= cost
         returns = self.total_value - self.start_money
-        reward += returns
-        return reward, hidden, returns
+        reward += returns / 4
+        return reward, hidden, returns, prices_T, features, actions
 
     def compute_loss(self, reward, hidden):
-        reward, hidden, returns = self.run(reward, hidden)
+        reward, hidden, returns, prices_T, features, actions = self.run(reward, hidden)
+        Q_targets_next, self.target_hidden = self.target_model([prices_T, features], self.target_hidden)
+        Q_targets_next = Q_targets_next.detach().cpu().data.max(1, keepdim=True)[1]
+        Q_targets = reward + (self.gamma * Q_targets_next)
+        Q_expected, _ = self.model([prices_T, features], hidden)
+        print(actions.type())
+        Q_expected = Q_expected.gather(1, actions.unsqueeze(1).cuda())
+        print(Q_targets.shape)
+        loss = self.criterion(Q_expected, Q_targets)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.soft_update()
         return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value
+
+    def soft_update(self):
+        for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
+            target_param.data.copy_(self.TAU * local_param.data + (1.0 - self.TAU) * target_param.data)
+
+
+class ReplayBuffer():
+    def __init__(self, replay_size, batch_size, seed):
+        self.memory = deque(maxlen=replay_size)
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state"])
+        self.seed = random.seed(seed)
+        self.batch_size = batch_size
+
+    def add(self, state, action, reward, next_state, done):
+        e = self.experience(state, action, reward, next_state)
+        self.memory.append(e)
+
+    def sample(self):
+        experiences = random.sample(self.memory, k=self.batch_size)
+
+        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).cuda()
+        rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).cuda()
+        actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).cuda()
+        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).cuda()
+
+        return states, actions, rewards, next_states
+
+    def __len__(self):
+        return len(self.memory)
