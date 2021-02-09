@@ -29,8 +29,8 @@ ppo = DQN(model, lr, stocks, output_size, hidden)
 reward_list = deque(maxlen=100)
 for e in tqdm(range(epochs)):
     reward = 0
-    reward, profits, stocks_owned, hidden, cash, total = ppo.compute_loss(reward, hidden)
-    data = {"Stocks": (list(stocks_owned.keys())), "Number Owned": list(stocks_owned.values())}
+    reward, profits, stocks_owned, hidden, cash, total, value = ppo.compute_loss(reward, hidden)
+    data = {"Stocks": (list(stocks_owned.keys())), "Number Owned": list(stocks_owned.values()), "Value": list(value.values())}
     stocks_csv = pd.DataFrame(data)
     stocks_csv.to_csv("stocks_owned.csv")
 

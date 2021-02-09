@@ -54,7 +54,7 @@ class DQN:
         print(len(self.stocks))
         for stock in self.stocks:
             self.stocks_owned[stock] = 0
-            self.stocks_value[stock] = 0
+            self.stocks_value[stock] = 0.
         self.action_size = action_size
         self.target_hidden = hidden
         self.usable_stocks = 0
@@ -77,7 +77,7 @@ class DQN:
             if result == 0:
                 continue
             price, feature = get_stock(csv)
-            self.stocks_value[i] = price * self.stocks_owned[i]
+            self.stocks_value[i] = float(price * self.stocks_owned[i])
             feature = feature.unsqueeze(0)
             price_deque = prices[i]
             price_deque.append(price)
@@ -129,7 +129,7 @@ class DQN:
                 price = self.get_price(self.stocks[i])
                 self.current_money += (int(action) * -1) * price
                 self.stocks_owned[self.stocks[i]] += int(action)
-                self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
+                self.stocks_value[self.stocks[i]] = float(self.stocks_owned[self.stocks[i]] * price.data)
                 self.total_value = self.current_money + sum(self.stocks_value.values())
             else:
                 price = self.get_price(self.stocks[i])
@@ -139,7 +139,7 @@ class DQN:
                 else:
 
                     self.stocks_owned[self.stocks[i]] += int(action)
-                    self.stocks_value[self.stocks[i]] = self.stocks_owned[self.stocks[i]] * price
+                    self.stocks_value[self.stocks[i]] = float(self.stocks_owned[self.stocks[i]] * price.data)
                     self.total_value = self.current_money + sum(list(self.stocks_value.values()))
                     self.current_money -= cost
         returns = self.total_value - self.start_money
@@ -160,7 +160,7 @@ class DQN:
         loss.backward()
         self.optimizer.step()
         self.soft_update()
-        return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value
+        return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value, self.stocks_value
 
     def soft_update(self):
         for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
