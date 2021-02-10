@@ -55,6 +55,7 @@ class DQN:
         for stock in self.stocks:
             self.stocks_owned[stock] = 0
             self.stocks_value[stock] = 0.
+        self.transactions = []
         self.action_size = action_size
         self.target_hidden = hidden
         self.usable_stocks = 0
@@ -115,6 +116,7 @@ class DQN:
         self.epsilon *= self.epsilon_decay
 
     def run(self, reward, hidden):
+        self.transactions.clear()
         print(len(self.stocks_owned))
         actions, self.prices, prices_T, features = self.get_action(self.model, self.stocks,
                                                                            torch.tensor(
@@ -124,9 +126,11 @@ class DQN:
         for i in range(actions.shape[0]):
             action = self.possible_actions[actions[i]]
             if (int(self.stocks_owned[self.stocks[i]]) + int(action)) < 0:
+                self.transactions.append(0)
                 reward -= 1
             elif int(action) < 0:
                 price = self.get_price(self.stocks[i])
+                self.transactions.append(action)
                 self.current_money += (int(action) * -1) * price
                 self.stocks_owned[self.stocks[i]] += int(action)
                 self.stocks_value[self.stocks[i]] = float(self.stocks_owned[self.stocks[i]] * price.data)
@@ -135,9 +139,10 @@ class DQN:
                 price = self.get_price(self.stocks[i])
                 cost = price * int(action)
                 if self.current_money - cost < 0:
+                    self.transactions.append(0)
                     reward -= 5
                 else:
-
+                    self.transactions.append(action)
                     self.stocks_owned[self.stocks[i]] += int(action)
                     self.stocks_value[self.stocks[i]] = float(self.stocks_owned[self.stocks[i]] * price.data)
                     self.total_value = self.current_money + sum(list(self.stocks_value.values()))
@@ -162,7 +167,7 @@ class DQN:
         loss.backward()
         self.optimizer.step()
         self.soft_update()
-        return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value, self.stocks_value
+        return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value, self.stocks_value, self.transactions
 
     def soft_update(self):
         for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
