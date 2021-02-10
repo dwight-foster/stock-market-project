@@ -36,9 +36,10 @@ def get_stock(csv):
 
 
 class DQN:
-    def __init__(self, model, lr, stocks, action_size, hidden,
+    def __init__(self, model, lr, stocks, action_size, hidden, batch_size,
                  gamma=0.99, epsilon=0.95, epsilon_decay=0.9, TAU=1e-3):
         self.model = model
+        self.batch_size = batch_size
         self.target_model = model
         self.lr = lr
         self.optimizer = optim.Adam(model.parameters(), self.lr)
@@ -51,19 +52,27 @@ class DQN:
         self.stocks_owned = {}
         self.stocks_value = {}
         self.stocks = stocks
-        print(len(self.stocks))
-        for stock in self.stocks:
-            self.stocks_owned[stock] = 0
-            self.stocks_value[stock] = 0.
+        self.reset_state()
         self.transactions = []
         self.action_size = action_size
         self.target_hidden = hidden
-        self.usable_stocks = 0
         self.start_money = 1000
         self.current_money = self.start_money
         self.total_value = 1000
+        self.returns = 0
         self.lr_scheduler = optim.lr_scheduler.StepLR(self.optimizer, 200, 0.5)
         self.possible_actions = [-2, -1, 0, 1, 2]
+
+    def reset_state(self):
+        for stock in self.stocks:
+            self.stocks_owned[stock] = 0
+            self.stocks_value[stock] = 0.
+        if len(self.stocks_value) < self.batch_size:
+            difference = 64 - len(self.stocks_value) - 1
+            for i in range(len(self.stocks_value) - 1, len(self.stocks_value) + difference):
+                self.stocks_value[self.stocks[i]] = 0
+                self.stocks_owned[self.stocks[i]] = 0
+        self.total_value = 1000
 
     def get_data(self, stocks, prices=None, seq_length=50):
         if prices == None:
@@ -99,8 +108,10 @@ class DQN:
         prices_T, features, prices = self.get_data(stocks, prices)
         prices_T = prices_T.cuda()
         features = features.cuda()
+        values = torch.tensor([self.total_value, self.current_money, self.returns]).unsqueeze(1).cuda()
+
         current_stocks = current_stocks.cuda().view(current_stocks.shape[1], current_stocks.shape[0])
-        features = torch.cat([features, current_stocks], dim=1)
+        features = torch.cat([features, current_stocks, values], dim=1)
         prices_T = torch.reshape(prices_T, (prices_T.shape[2], prices_T.shape[0], 1))
         with torch.no_grad():
             pred, _ = self.model([prices_T, features], hidden)
@@ -119,15 +130,15 @@ class DQN:
         self.transactions.clear()
         print(len(self.stocks_owned))
         actions, self.prices, prices_T, features = self.get_action(self.model, self.stocks,
-                                                                           torch.tensor(
-                                                                               [list(self.stocks_owned.values())]),
-                                                                           hidden,
-                                                                           self.prices)
+                                                                   torch.tensor(
+                                                                       [list(self.stocks_owned.values())]),
+                                                                   hidden,
+                                                                   self.prices)
         for i in range(actions.shape[0]):
             action = self.possible_actions[actions[i]]
             if (int(self.stocks_owned[self.stocks[i]]) + int(action)) < 0:
                 self.transactions.append(0)
-                reward -= 1
+                reward -= 0.5
             elif int(action) < 0:
                 price = self.get_price(self.stocks[i])
                 self.transactions.append(action)
@@ -140,24 +151,32 @@ class DQN:
                 cost = price * int(action)
                 if self.current_money - cost < 0:
                     self.transactions.append(0)
-                    reward -= 5
+                    reward -= 2
                 else:
                     self.transactions.append(action)
                     self.stocks_owned[self.stocks[i]] += int(action)
                     self.stocks_value[self.stocks[i]] = float(self.stocks_owned[self.stocks[i]] * price.data)
-                    self.total_value = self.current_money + sum(list(self.stocks_value.values()))
                     self.current_money -= cost
-        returns = self.total_value - self.start_money
-        reward += returns
-        return reward, returns, prices_T, features, actions
+                    self.total_value = self.current_money + sum(list(self.stocks_value.values()))
+
+        self.returns = self.total_value - self.start_money
+        if self.total_value < 50.:
+            self.reset_state()
+            done = 1.
+            print("Ran out of money reseting state.")
+            reward -= 50
+        else:
+            done = 0.
+        reward += self.returns/2
+        reward += (self.current_money - self.start_money) * 1.5
+        return reward, prices_T, features, actions, done
 
     def compute_loss(self, reward, hidden):
-        reward, returns, prices_T, features, actions = self.run(reward, hidden)
-        
+        reward, prices_T, features, actions, done = self.run(reward, hidden)
 
-        Q_targets_next,_ = self.target_model([prices_T, features], hidden)
+        Q_targets_next, _ = self.target_model([prices_T, features], hidden)
         Q_targets_next = Q_targets_next.detach().data.max(1, keepdim=True)[1]
-        Q_targets = reward + (self.gamma * Q_targets_next)
+        Q_targets = reward + (self.gamma * Q_targets_next * (1-done))
         Q_expected, hidden = self.model([prices_T, features], hidden)
         hidden[0].detach_()
         hidden[1].detach_()
@@ -167,7 +186,7 @@ class DQN:
         loss.backward()
         self.optimizer.step()
         self.soft_update()
-        return reward, returns, self.stocks_owned, hidden, self.current_money, self.total_value, self.stocks_value, self.transactions
+        return reward, self.returns, self.stocks_owned, hidden, self.current_money, self.total_value, self.stocks_value, self.transactions
 
     def soft_update(self):
         for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
