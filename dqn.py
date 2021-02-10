@@ -108,8 +108,8 @@ class DQN:
             self.update_epsilon()
         else:
             action = [random.choice(np.arange(self.action_size)) for i in range(pred.shape[0])]
-            action = torch.tensor(action, dtype=torch.int64)
-        return action, prices, prices_T, features
+            action = torch.tensor(action, dtype=torch.int64).unsqueeze(1)
+        return action.detach(), prices, prices_T, features
 
     def update_epsilon(self):
         self.epsilon *= self.epsilon_decay
@@ -121,7 +121,7 @@ class DQN:
                                                                                [list(self.stocks_owned.values())]),
                                                                            hidden,
                                                                            self.prices)
-        for i in range(len(actions)):
+        for i in range(actions.shape[0]):
             action = self.possible_actions[actions[i]]
             if (int(self.stocks_owned[self.stocks[i]]) + int(action)) < 0:
                 reward -= 1
@@ -143,18 +143,20 @@ class DQN:
                     self.total_value = self.current_money + sum(list(self.stocks_value.values()))
                     self.current_money -= cost
         returns = self.total_value - self.start_money
-        reward += returns / 4
+        reward += returns
         return reward, returns, prices_T, features, actions
 
     def compute_loss(self, reward, hidden):
         reward, returns, prices_T, features, actions = self.run(reward, hidden)
+        
+
         Q_targets_next,_ = self.target_model([prices_T, features], hidden)
         Q_targets_next = Q_targets_next.detach().data.max(1, keepdim=True)[1]
         Q_targets = reward + (self.gamma * Q_targets_next)
         Q_expected, hidden = self.model([prices_T, features], hidden)
         hidden[0].detach_()
         hidden[1].detach_()
-        Q_expected = Q_expected.gather(1, actions.unsqueeze(1).cuda())
+        Q_expected = Q_expected.gather(1, actions.cuda())
         loss = self.criterion(Q_expected, Q_targets)
         self.optimizer.zero_grad()
         loss.backward()
