@@ -168,7 +168,7 @@ class DQN:
         else:
             done = 0.
         reward += self.returns/2
-        reward += (self.current_money - self.start_money) * 1.5
+        reward += float(np.clip(self.current_money - self.start_money, 100, 0)) * 1.5
         return reward, prices_T, features, actions, done
 
     def compute_loss(self, reward, hidden):
