@@ -10,15 +10,17 @@ from statistics import mean
 from tqdm import tqdm
 import os
 import sys
+from yahoo_fin.stock_info import get_day_gainers
+
 
 batch_size = 3
-input_sizes = [1, 6, 50]
+input_sizes = [1, 6, 20]
 hidden_size = 300
 num_layers = 2
 dropout = 0.5
 output_size = 5
 lr = 0.0001
-seq_length = 50
+seq_length = 20
 epochs = 100000
 model = LSTM(input_sizes, hidden_size, num_layers, dropout, output_size)
 model.cuda()

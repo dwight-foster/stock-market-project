@@ -74,7 +74,7 @@ class DQN:
                 self.stocks_owned[self.stocks[i]] = 0
         self.total_value = 1000
 
-    def get_data(self, stocks, prices=None, seq_length=50):
+    def get_data(self, stocks, prices=None, seq_length=20):
         if prices == None:
             prices = {}
             zeros = [0 for i in range(seq_length)]
