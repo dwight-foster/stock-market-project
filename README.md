@@ -3,6 +3,8 @@
 It is not that great but it is a cool starter program if you are trying to do something like this. It uses a on policy dqn to make trading decisions.
 It is passed data scraped from finviz.com. WARNING ALL DATA FROM FINVIZ IS DELAYED BY 15 MINUTES. The model is a combination of an lstm and a linear layer.
 The LSTM is passed the price data for the stock while the linear layers are passed information about the company and the amount of money it has. 
+## Suggestions
+Although I would not use this bot to trade one thing you could use it for is which stocks are doing the best on the day. This could help you see many more stocks and choose which ones are the best. 
 
 If someone wants me to make a video going over everything in it I will happily do so. You can email me at this address with any questions or requests: dwightf404@gmail.com. 
 
